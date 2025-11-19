@@ -1,0 +1,4 @@
+#ignore Debug folder and its contents
+Debug/
+#ignore .settings folder
+.settings/
