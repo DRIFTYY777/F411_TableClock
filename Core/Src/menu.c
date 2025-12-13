@@ -123,13 +123,7 @@ void Menu_ExecuteSelected(void) {
 }
 
 void Menu_Update(void) {
-    // Throttle updates to prevent too rapid changes
-    uint32_t current_time = HAL_GetTick();
-    if (current_time - last_update_time < MENU_UPDATE_DELAY_MS) {
-        return;
-    }
-    
-    bool needs_update = false;
+    // Process button inputs with proper delays
     
     // UP button - move selection up
     if (get_btn(UP_BUTTON)) {
@@ -139,8 +133,9 @@ void Menu_Update(void) {
             // Wrap to bottom
             menu_state.selected_index = menu_state.current_menu_size - 1;
         }
-        needs_update = true;
-        last_update_time = current_time;
+        Menu_Display();
+        HAL_Delay(200);  // Prevent rapid button repeats
+        return;
     }
     
     // DOWN button - move selection down
@@ -151,15 +146,16 @@ void Menu_Update(void) {
             // Wrap to top
             menu_state.selected_index = 0;
         }
-        needs_update = true;
-        last_update_time = current_time;
+        Menu_Display();
+        HAL_Delay(200);  // Prevent rapid button repeats
+        return;
     }
     
     // ENTER button - execute selected item
     if (get_btn(ENTER_BUTTON)) {
         Menu_ExecuteSelected();
-        last_update_time = current_time;
-        return; // ExecuteSelected already updates display
+        HAL_Delay(250);  // Longer delay to prevent accidental double-press
+        return;
     }
     
     // BACK button (physical button) - go back to parent menu
@@ -167,12 +163,7 @@ void Menu_Update(void) {
         if (menu_state.parent_menu != NULL) {
             Menu_GoBack();
         }
-        last_update_time = current_time;
-        return; // GoBack already updates display
-    }
-    
-    // Update display if selection changed
-    if (needs_update) {
-        Menu_Display();
+        HAL_Delay(250);  // Longer delay to prevent accidental double-press
+        return;
     }
 }

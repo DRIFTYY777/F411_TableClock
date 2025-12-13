@@ -25,4 +25,7 @@ void init_buttons(void);
 // returns true if button is pressed with debouncing (only once per press)
 bool get_btn(enum Button button);
 
+// returns true if button is long pressed (held for BUTTON_LONG_PRESS_MS)
+bool get_btn_long_press(enum Button button);
+
 #endif /* INC_BUTTONS_H_ */

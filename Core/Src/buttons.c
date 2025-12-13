@@ -12,7 +12,7 @@
 
 
 // Button debouncing constants and variables
-#define BUTTON_DEBOUNCE_TIME_MS 50  // 50ms ISR debounce
+#define BUTTON_DEBOUNCE_TIME_MS 80  // 50ms ISR debounce
 #define BUTTON_LONG_PRESS_MS 1000   // 1s long press
 
 static volatile bool button_event[4] = {false};        // edge event set by ISR
@@ -114,4 +114,45 @@ bool get_btn(enum Button button)
     __enable_irq();
 
     return ev;
+}
+
+// Check if button is held down for long press duration
+bool get_btn_long_press(enum Button button)
+{
+    int idx = (int)button;
+    if (idx < 0 || idx > 3) return false;
+
+    GPIO_TypeDef* port = NULL;
+    uint16_t pin = 0;
+    
+    // Map button to GPIO
+    switch(button)
+    {
+        case UP_BUTTON:    port = UP_GPIO_Port; pin = UP_Pin; break;
+        case DOWN_BUTTON:  port = DOWN_GPIO_Port; pin = DOWN_Pin; break;
+        case BACK_BUTTON:  port = BACK_GPIO_Port; pin = BACK_Pin; break;
+        case ENTER_BUTTON: port = ENTER_GPIO_Port; pin = ENTER_Pin; break;
+        default: return false;
+    }
+    
+    // Check if button is currently pressed (GPIO low, due to pull-up)
+    if (HAL_GPIO_ReadPin(port, pin) == GPIO_PIN_RESET)
+    {
+        // Button is pressed, check if it's been held long enough
+        uint32_t now = HAL_GetTick();
+        __disable_irq();
+        uint32_t press_time = button_press_time[idx];
+        __enable_irq();
+        
+        if ((now - press_time) >= BUTTON_LONG_PRESS_MS)
+        {
+            // Clear the event flag to prevent double-trigger
+            __disable_irq();
+            button_event[idx] = false;
+            __enable_irq();
+            return true;
+        }
+    }
+    
+    return false;
 }

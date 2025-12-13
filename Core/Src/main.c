@@ -120,11 +120,10 @@ int main(void)
   LCD16X2_Init(&lcdHandle);
   // Initialize Buttons
   init_buttons();
-  // Initialize Backlight
+  // Initialize Backlight hardware only (don't set state yet)
   beginBacklight(BACKLIGHT_PORT, BACKLIGHT_PIN);
-  setBacklight(true); // Turn on backlight by default
-  // Initialize Menu System
-  Menu_Init(main_menu, 2);
+  // Initialize UI System - this will load settings and apply backlight state
+  UI_Init();
 
 
   /* USER CODE END 2 */
@@ -133,7 +132,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  Menu_Update();z
+	  UI_Update();
   }
   /* USER CODE END 3 */
 }
