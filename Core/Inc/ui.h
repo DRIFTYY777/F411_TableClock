@@ -1,44 +1,32 @@
 /*
  * ui.h
  *
- *  Created on: Nov 15, 2025
- *      Author: DRIFTYY777
+ *  Created on: 05-Jul-2026
+ *      Author: DRIFTYY
  */
 
 #ifndef INC_UI_H_
 #define INC_UI_H_
 
-#include <stddef.h>
-#include <menu.h>
-#include <stdbool.h>
+typedef enum
+{
+	HOME_SCREEN,
+	MENU_SCREEN,
 
-// UI Mode enumeration
-typedef enum {
-    UI_MODE_HOME,
-    UI_MODE_MENU
-} UIMode;
+	DATE_SCREEN,
+	TIME_SCREEN,
 
-/* We have to send this values to menu creator */
-extern MenuItem settings_menu[];
-extern MenuItem data_menu[];
-extern MenuItem main_menu[];
+	BACKLIGHT_SCREEN,
 
-// Initialize UI system
-void UI_Init(void);
+	INFO_SCREEN
+};
 
-// Update UI (call in main loop)
-void UI_Update(void);
+char *menu[] = {
+	"MENU",
+	"Set Date",
+	"Set Time",
+	"Back-Light"};
 
-// Get current UI mode
-UIMode UI_GetMode(void);
-
-// Switch to menu mode
-void UI_EnterMenu(void);
-
-// Switch to home mode
-void UI_ExitMenu(void);
-
-// Display home screen
-void UI_ShowHomeScreen(void);
+void ui_task();
 
 #endif /* INC_UI_H_ */

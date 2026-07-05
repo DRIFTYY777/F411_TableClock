@@ -37,44 +37,6 @@ extern "C" {
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
 
-// lcd pins
-
-#define RS_PIN GPIO_PIN_0
-#define RS_PORT GPIOA
-
-#define ENABLE_PIN GPIO_PIN_1
-#define ENABLE_PORT GPIOA
-
-#define D4_PIN GPIO_PIN_2
-#define D4_PORT GPIOA
-
-#define D5_PIN GPIO_PIN_3
-#define D5_PORT GPIOA
-
-#define D6_PIN GPIO_PIN_4
-#define D6_PORT GPIOA
-
-#define D7_PIN GPIO_PIN_5
-#define D7_PORT GPIOA
-
-#define BACKLIGHT_PIN GPIO_PIN_9
-#define BACKLIGHT_PORT GPIOB
-
-
-// buttons
-#define UP_Pin GPIO_PIN_6
-#define UP_GPIO_Port GPIOB
-
-#define DOWN_Pin GPIO_PIN_8
-#define DOWN_GPIO_Port GPIOB
-
-#define ENTER_Pin GPIO_PIN_7
-#define ENTER_GPIO_Port GPIOB
-
-#define BACK_Pin GPIO_PIN_5
-#define BACK_GPIO_Port GPIOB
-
-
 
 /* USER CODE END ET */
 
@@ -88,6 +50,8 @@ extern "C" {
 
 /* USER CODE END EM */
 
+void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
+
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
 
@@ -96,6 +60,30 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define RS_Pin GPIO_PIN_3
+#define RS_GPIO_Port GPIOA
+#define E_Pin GPIO_PIN_4
+#define E_GPIO_Port GPIOA
+#define D4_Pin GPIO_PIN_5
+#define D4_GPIO_Port GPIOA
+#define D5_Pin GPIO_PIN_6
+#define D5_GPIO_Port GPIOA
+#define D6_Pin GPIO_PIN_7
+#define D6_GPIO_Port GPIOA
+#define D7_Pin GPIO_PIN_0
+#define D7_GPIO_Port GPIOB
+#define BackLight_Pin GPIO_PIN_1
+#define BackLight_GPIO_Port GPIOB
+#define UP_Pin GPIO_PIN_15
+#define UP_GPIO_Port GPIOA
+#define DOWN_Pin GPIO_PIN_3
+#define DOWN_GPIO_Port GPIOB
+#define ENTER_Pin GPIO_PIN_4
+#define ENTER_GPIO_Port GPIOB
+#define BACK_Pin GPIO_PIN_5
+#define BACK_GPIO_Port GPIOB
+#define DHT_Pin GPIO_PIN_6
+#define DHT_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

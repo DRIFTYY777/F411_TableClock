@@ -18,43 +18,40 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "16_2_display.h"
-#include "backLight.h"
-#include "buttons.h"
-#include "menu.h"
-#include "ui.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "stdbool.h"
+#include "lcd.h"
+#include "rtcmanager.h"
 
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
+#define LCD20X4
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
-
-// init the lcd handle
-LCD16X2_HandleTypeDef lcdHandle = {
-	.rs_Port = RS_PORT,
-	.rs_Pin = RS_PIN,
-	.rw_Port = NULL, // RW not used, tie to GND
-	.rw_Pin = -1,
-	.en_Port = ENABLE_PORT,
-	.en_Pin = ENABLE_PIN,
-	.d4_Port = D4_PORT,
-	.d4_Pin = D4_PIN,
-	.d5_Port = D5_PORT,
-	.d5_Pin = D5_PIN,
-	.d6_Port = D6_PORT,
-	.d6_Pin = D6_PIN,
-	.d7_Port = D7_PORT,
-	.d7_Pin = D7_PIN
+LCD_HandleTypeDef LCD = {
+	.rs_Port = RS_GPIO_Port,
+	.rs_Pin = RS_Pin,
+	.en_Port = E_GPIO_Port,
+	.en_Pin = E_Pin,
+	.d4_Port = D4_GPIO_Port,
+	.d4_Pin = D4_Pin,
+	.d5_Port = D5_GPIO_Port,
+	.d5_Pin = D5_Pin,
+	.d6_Port = D6_GPIO_Port,
+	.d6_Pin = D6_Pin,
+	.d7_Port = D7_GPIO_Port,
+	.d7_Pin = D7_Pin
 };
+
 
 /* USER CODE END PD */
 
@@ -66,6 +63,8 @@ LCD16X2_HandleTypeDef lcdHandle = {
 /* Private variables ---------------------------------------------------------*/
 RTC_HandleTypeDef hrtc;
 
+TIM_HandleTypeDef htim3;
+
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -74,6 +73,7 @@ RTC_HandleTypeDef hrtc;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_RTC_Init(void);
+static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -113,18 +113,26 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_RTC_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
+  LCD_Init(&LCD);
+  LCD_Clear();
+  bool timeWasKept = RTC_Manager_Init(&hrtc);
 
-  // Initialize LCD
-  LCD16X2_Init(&lcdHandle);
-  // Initialize Buttons
-  init_buttons();
-  // Initialize Backlight hardware only (don't set state yet)
-  beginBacklight(BACKLIGHT_PORT, BACKLIGHT_PIN);
-  // Initialize UI System - this will load settings and apply backlight state
-  UI_Init();
-
+  if (!timeWasKept) {
+         /* Time was lost — set your real time here or via UART cmd */
+         DateTime_t now = {0};
+         now.time.Hours   = 10;
+         now.time.Minutes = 30;
+         now.time.Seconds = 0;
+         now.date.Year    = 25;
+         now.date.Month   = RTC_MONTH_APRIL;
+         now.date.Date    = 24;
+         now.date.WeekDay = RTC_WEEKDAY_THURSDAY;
+         RTC_SetDateTime(&hrtc, &now);
+     }
+  RTC_BkpWrite(&hrtc, BKP_REG_USER_DATA0, 0x12345678);
 
   /* USER CODE END 2 */
 
@@ -132,7 +140,10 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  UI_Update();
+    /* USER CODE END WHILE */
+	  RTC_PrintDateTime(&hrtc);
+	  HAL_Delay(1000);
+    /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
 }
@@ -195,7 +206,8 @@ static void MX_RTC_Init(void)
   RTC_DateTypeDef sDate = {0};
 
   /* USER CODE BEGIN RTC_Init 1 */
-
+  __HAL_RCC_PWR_CLK_ENABLE();
+  HAL_PWR_EnableBkUpAccess();     // ← unlock backup domain
   /* USER CODE END RTC_Init 1 */
 
   /** Initialize RTC Only
@@ -243,12 +255,72 @@ static void MX_RTC_Init(void)
 }
 
 /**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 0;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 65535;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
+  HAL_TIM_MspPostInit(&htim3);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
   */
 static void MX_GPIO_Init(void)
 {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
   /* USER CODE BEGIN MX_GPIO_Init_1 */
 
   /* USER CODE END MX_GPIO_Init_1 */
@@ -256,6 +328,42 @@ static void MX_GPIO_Init(void)
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, RS_Pin|E_Pin|D4_Pin|D5_Pin
+                          |D6_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, D7_Pin|DHT_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pins : RS_Pin E_Pin D4_Pin D5_Pin
+                           D6_Pin */
+  GPIO_InitStruct.Pin = RS_Pin|E_Pin|D4_Pin|D5_Pin
+                          |D6_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : D7_Pin DHT_Pin */
+  GPIO_InitStruct.Pin = D7_Pin|DHT_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : UP_Pin */
+  GPIO_InitStruct.Pin = UP_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(UP_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : DOWN_Pin ENTER_Pin BACK_Pin */
+  GPIO_InitStruct.Pin = DOWN_Pin|ENTER_Pin|BACK_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
