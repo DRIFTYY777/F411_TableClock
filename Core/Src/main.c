@@ -64,6 +64,11 @@ static void MX_RTC_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc)
+{
+}
+
 void Enter_Stop_Mode_Until_Next_Minute(void)
 {
   RTC_TimeTypeDef time;
@@ -146,9 +151,6 @@ int main(void)
   // Initialize inputs
   inputs_init();
 
-  // The UI enables the backlight only while a menu screen is active.
-  HAL_GPIO_WritePin(BACKLIGHT_PORT, BACKLIGHT_PIN, 0);
-
   // get the time format from backup register
   time_format = HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1);
 
@@ -159,6 +161,9 @@ int main(void)
   }
 
   set_time_format(time_format); // Apply the time format to the RTC
+
+  // get the backlight value from backup register
+  set_backlight(get_backlight()); // Apply the backlight value
 
   /* USER CODE END 2 */
 
@@ -376,6 +381,17 @@ void set_time_format(TimeFormat_t format)
 TimeFormat_t get_time_format(void)
 {
   return time_format;
+}
+
+void set_backlight(uint8_t backlight)
+{
+  HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR2, backlight); // Store the backlight value in backup register
+  HAL_GPIO_WritePin(BACKLIGHT_PORT, BACKLIGHT_PIN, backlight);
+}
+
+uint8_t get_backlight(void)
+{
+  return (uint8_t)HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR2); // Read the backlight value from backup register
 }
 
 /* USER CODE END 4 */

@@ -42,11 +42,9 @@ typedef enum
     MENU_SCREEN,
     ALARM_SCREEN,
     DATE_SCREEN,
-    FORMAT_SCREEN,
     TIME_SCREEN,
-    STOPWATCH_SCREEN,
-    TIMER_SCREEN,
-    BRIGHTNESS
+    FORMAT_SCREEN,
+    BACKLIGHT
 } SCREEN_STATE;
 
 SCREEN_STATE current_screen = HOME_SCREEN;   // current screen state
@@ -54,15 +52,13 @@ SCREEN_STATE last_screen = (SCREEN_STATE)-1; // last screen state
 
 // Removed "Menu" header string so item indexes align 1:1 with enum actions
 char *menu[] = {
-    "Menu",       // 0
-    "Alarm",      // 1
-    "Date",       // 2
-    "Time",       // 3
-    "Format",     // 4
-    "Stop Watch", // 5
-    "Timer",      // 6
-    "Brightness", // 7
-    "Back"};      // 8
+    "Menu",      // 0
+    "Alarm",     // 1
+    "Date",      // 2
+    "Time",      // 3
+    "Format",    // 4
+    "Backlight", // 5
+    "Back"};     // 6
 
 static const uint8_t menu_size = sizeof(menu) / sizeof(menu[0]);
 
@@ -86,6 +82,8 @@ void set_time_screen();
 void set_format(Switch_t sw);
 
 void set_brightness(Switch_t sw);
+void set_alarm_api(uint8_t alarm_number, uint8_t hours, uint8_t minutes, uint8_t dayofweek);
+void set_alarm_screen(Switch_t sw);
 
 Switch_t handle_date_input(Switch_t sw, TimeDate_t *time);
 Switch_t handle_time_input(Switch_t sw, TimeDate_t *time);
@@ -173,15 +171,9 @@ void handle_menu(Switch_t sw)
             current_screen = FORMAT_SCREEN;
             break;
         case 5:
-            current_screen = STOPWATCH_SCREEN;
+            current_screen = BACKLIGHT;
             break;
-        case 6:
-            current_screen = TIMER_SCREEN;
-            break;
-        case 7:
-            current_screen = BRIGHTNESS;
-            break;
-        case 8: // "Back" option inside menu
+        case 6: // "Back" option inside menu
             current_screen = HOME_SCREEN;
             break;
         default:
@@ -262,10 +254,6 @@ void ui_task(void)
             menu_timeout = HAL_GetTick() + MENU_TIMEOUT_MS;
         }
 
-        /* Update backlight based on current screen */
-        HAL_GPIO_WritePin(BACKLIGHT_PORT, BACKLIGHT_PIN,
-                          (current_screen == HOME_SCREEN) ? GPIO_PIN_RESET : GPIO_PIN_SET);
-
         Lcd_clear(lcd_ptr);
     }
 
@@ -310,17 +298,14 @@ void ui_task(void)
             HAL_RTC_SetTime(hrtc_ptr, &sTime, RTC_FORMAT_BIN);
         }
         break;
-    case BRIGHTNESS:
+    case BACKLIGHT:
         set_brightness(sw);
         break;
     case ALARM_SCREEN:
+        set_alarm_screen(sw);
         break;
     case FORMAT_SCREEN:
         set_format(sw);
-        break;
-    case STOPWATCH_SCREEN:
-        break;
-    case TIMER_SCREEN:
         break;
     };
 }
@@ -856,29 +841,104 @@ void set_format(Switch_t sw)
 
 void set_brightness(Switch_t sw)
 {
-    static uint8_t brightness_level = 5; // Default brightness level (0-10)
-    static char line1[17];
+    static uint8_t cursor_pos = 0; // 0 = Enable Backlight, 1 = Disable Backlight
 
     if (re_draws)
     {
+        // Force redraw flags
         re_draws = 0;
         last_cursor = -1;
+
+        cursor_pos = get_backlight(); // Backlight enabled
     }
 
-    // Display the brightness input screen
-    snprintf(line1, sizeof(line1), "Brightness: %d", brightness_level);
-    Lcd_cursor(lcd_ptr, 0, 0);
-    Lcd_string(lcd_ptr, line1);
-
-    // Handle user input for brightness adjustment
+    // set backlight  on/off
     if (sw == SW_UP)
     {
-        if (brightness_level < 10)
-            brightness_level++;
+        if (cursor_pos > 0)
+            cursor_pos--;
     }
     else if (sw == SW_DOWN)
     {
-        if (brightness_level > 0)
-            brightness_level--;
+        if (cursor_pos < 1)
+            cursor_pos++;
     }
+    else if (sw == SW_ENTER)
+    {
+        set_backlight(cursor_pos); // Enable backlight
+
+        // Update the display to reflect the new state
+        re_draws = 1;     // Force redraw to update the display
+        last_cursor = -1; // Reset the last cursor position
+        cursor_pos = -1;
+        current_screen = MENU_SCREEN; // Return to main menu after selection
+    }
+    else if (sw == SW_BACK)
+    {
+        current_screen = MENU_SCREEN;
+        menu_index = 0; // reset menu index
+        menu_needs_redraw = 1;
+        re_draws = 1;    // reset re_draws counter
+        last_cursor = 0; // reset last_cursor when entering home screen
+        cursor_pos = 0;  // reset cursor position when entering home screen
+        Lcd_clear(lcd_ptr);
+    }
+
+    if (cursor_pos == 0)
+    {
+        Lcd_cursor(lcd_ptr, 0, 0);
+        Lcd_string(lcd_ptr, "  Enable ");
+
+        Lcd_cursor(lcd_ptr, 1, 0);
+        Lcd_string(lcd_ptr, "> Disable");
+    }
+    else if (cursor_pos == 1)
+    {
+        Lcd_cursor(lcd_ptr, 0, 0);
+        Lcd_string(lcd_ptr, "> Enable ");
+
+        Lcd_cursor(lcd_ptr, 1, 0);
+        Lcd_string(lcd_ptr, "  Disable");
+    }
+}
+
+void set_alarm_api(uint8_t alarm_number, uint8_t hours, uint8_t minutes, uint8_t dayofweek)
+{
+    RTC_AlarmTypeDef sAlarm = {0};
+    sAlarm.AlarmTime.Hours = hours;
+    sAlarm.AlarmTime.Minutes = minutes;
+    sAlarm.AlarmTime.Seconds = 0;
+    sAlarm.AlarmTime.SubSeconds = 0;
+    sAlarm.AlarmTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+    sAlarm.AlarmTime.StoreOperation = RTC_STOREOPERATION_RESET;
+
+    sAlarm.AlarmDateWeekDay = dayofweek;
+    sAlarm.AlarmMask = RTC_ALARMMASK_NONE;
+
+    if (HAL_RTC_SetAlarm(hrtc_ptr, &sAlarm, RTC_FORMAT_BIN) != HAL_OK)
+    {
+        Error_Handler();
+    }
+}
+
+void set_alarm_screen(Switch_t sw)
+{
+    uint8_t timmer = 255;
+    // print not avaliable yet and exit
+    Lcd_clear(lcd_ptr);
+    Lcd_cursor(lcd_ptr, 0, 0);
+    Lcd_string(lcd_ptr, "Alarm not available");
+
+    while (timmer > 0)
+    {
+        timmer--;
+        HAL_Delay(10);
+
+        if (sw == SW_BACK)
+        {
+            break;
+        }
+    }
+
+    current_screen = MENU_SCREEN;
 }

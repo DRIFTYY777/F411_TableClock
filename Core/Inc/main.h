@@ -119,6 +119,9 @@ extern "C"
     void set_time_format(TimeFormat_t format);
     TimeFormat_t get_time_format(void);
 
+    void set_backlight(uint8_t backlight);
+    uint8_t get_backlight(void);
+
     /* USER CODE END Private defines */
 
 #ifdef __cplusplus
