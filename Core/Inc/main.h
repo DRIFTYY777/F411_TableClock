@@ -1,21 +1,21 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.h
-  * @brief          : Header for main.c file.
-  *                   This file contains the common defines of the application.
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.h
+ * @brief          : Header for main.c file.
+ *                   This file contains the common defines of the application.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2025 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
@@ -23,71 +23,103 @@
 #define __MAIN_H
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f4xx_hal.h"
 
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
+    /* Private includes ----------------------------------------------------------*/
+    /* USER CODE BEGIN Includes */
 
-/* USER CODE END Includes */
+    /* USER CODE END Includes */
 
-/* Exported types ------------------------------------------------------------*/
-/* USER CODE BEGIN ET */
+    /* Exported types ------------------------------------------------------------*/
+    /* USER CODE BEGIN ET */
+    typedef enum
+    {
+        _24_HOUR_MODE = 0,
+        _12_HOUR_MODE = 1,
+        _NONE = 2
+    } TimeFormat_t;
 
+    extern TimeFormat_t time_format; // Global variable to hold the current time format
 
-/* USER CODE END ET */
+    /* USER CODE END ET */
 
-/* Exported constants --------------------------------------------------------*/
-/* USER CODE BEGIN EC */
+    /* Exported constants --------------------------------------------------------*/
+    /* USER CODE BEGIN EC */
 
-/* USER CODE END EC */
+    /* USER CODE END EC */
 
-/* Exported macro ------------------------------------------------------------*/
-/* USER CODE BEGIN EM */
+    /* Exported macro ------------------------------------------------------------*/
+    /* USER CODE BEGIN EM */
 
-/* USER CODE END EM */
+    // lcd pins
+#define RS_PIN GPIO_PIN_0
+#define RS_PORT GPIOA
 
-void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
+#define ENABLE_PIN GPIO_PIN_1
+#define ENABLE_PORT GPIOA
 
-/* Exported functions prototypes ---------------------------------------------*/
-void Error_Handler(void);
+#define D4_PIN GPIO_PIN_2
+#define D4_PORT GPIOA
 
-/* USER CODE BEGIN EFP */
+#define D5_PIN GPIO_PIN_3
+#define D5_PORT GPIOA
 
-/* USER CODE END EFP */
+#define D6_PIN GPIO_PIN_4
+#define D6_PORT GPIOA
 
-/* Private defines -----------------------------------------------------------*/
-#define RS_Pin GPIO_PIN_3
-#define RS_GPIO_Port GPIOA
-#define E_Pin GPIO_PIN_4
-#define E_GPIO_Port GPIOA
-#define D4_Pin GPIO_PIN_5
-#define D4_GPIO_Port GPIOA
-#define D5_Pin GPIO_PIN_6
-#define D5_GPIO_Port GPIOA
-#define D6_Pin GPIO_PIN_7
-#define D6_GPIO_Port GPIOA
-#define D7_Pin GPIO_PIN_0
-#define D7_GPIO_Port GPIOB
-#define BackLight_Pin GPIO_PIN_1
-#define BackLight_GPIO_Port GPIOB
-#define UP_Pin GPIO_PIN_15
-#define UP_GPIO_Port GPIOA
-#define DOWN_Pin GPIO_PIN_3
+#define D7_PIN GPIO_PIN_5
+#define D7_PORT GPIOA
+
+#define BACKLIGHT_PIN GPIO_PIN_9
+#define BACKLIGHT_PORT GPIOB
+
+    // buttons
+    // #define UP_Pin GPIO_PIN_6
+    // #define UP_GPIO_Port GPIOB
+
+    // #define DOWN_Pin GPIO_PIN_8
+    // #define DOWN_GPIO_Port GPIOB
+
+    // #define ENTER_Pin GPIO_PIN_7
+    // #define ENTER_GPIO_Port GPIOB
+
+    // #define BACK_Pin GPIO_PIN_5
+    // #define BACK_GPIO_Port GPIOB
+
+#define UP_Pin GPIO_PIN_5
+#define UP_GPIO_Port GPIOB
+
+#define DOWN_Pin GPIO_PIN_7
 #define DOWN_GPIO_Port GPIOB
-#define ENTER_Pin GPIO_PIN_4
+
+#define ENTER_Pin GPIO_PIN_8
 #define ENTER_GPIO_Port GPIOB
-#define BACK_Pin GPIO_PIN_5
+
+#define BACK_Pin GPIO_PIN_6
 #define BACK_GPIO_Port GPIOB
-#define DHT_Pin GPIO_PIN_6
-#define DHT_GPIO_Port GPIOB
 
-/* USER CODE BEGIN Private defines */
+    /* USER CODE END EM */
 
-/* USER CODE END Private defines */
+    /* Exported functions prototypes ---------------------------------------------*/
+    void Error_Handler(void);
+
+    /* USER CODE BEGIN EFP */
+
+    /* USER CODE END EFP */
+
+    /* Private defines -----------------------------------------------------------*/
+
+    /* USER CODE BEGIN Private defines */
+
+    void set_time_format(TimeFormat_t format);
+    TimeFormat_t get_time_format(void);
+
+    /* USER CODE END Private defines */
 
 #ifdef __cplusplus
 }

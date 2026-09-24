@@ -1,279 +1,205 @@
+/*
+ * lcd.c
+ *
+ *  Created on: 10/06/2018
+ *      Author: Olivier Van den Eede
+ */
+
 #include "lcd.h"
-#include <stdbool.h>
+#include "stdio.h"
 
-static LCD_HandleTypeDef *MyLCD = NULL;
+const uint8_t ROW_16[] = {0x00, 0x40, 0x10, 0x50};
+const uint8_t ROW_20[] = {0x00, 0x40, 0x14, 0x54};
+/************************************** Static declarations **************************************/
 
-static volatile uint8_t display_updating = 0;
-volatile uint8_t lcd_busy = 0;
+static void lcd_write_data(Lcd_HandleTypeDef *lcd, uint8_t data);
+static void lcd_write_command(Lcd_HandleTypeDef *lcd, uint8_t command);
+static void lcd_write(Lcd_HandleTypeDef *lcd, uint8_t data, uint8_t len);
 
-// ...existing code...
-void LCD_send(uint8_t data, bool is_command)
+/************************************** Function definitions **************************************/
+
+/**
+ * Create new Lcd_HandleTypeDef and initialize the Lcd
+ */
+Lcd_HandleTypeDef Lcd_create(
+	Lcd_PortType port[], Lcd_PinType pin[],
+	Lcd_PortType rs_port, Lcd_PinType rs_pin,
+	Lcd_PortType en_port, Lcd_PinType en_pin, Lcd_ModeTypeDef mode)
 {
-    lcd_busy = 1;
+	Lcd_HandleTypeDef lcd;
 
-    // RS: 0 = Command, 1 = Data
-    HAL_GPIO_WritePin(MyLCD->rs_Port, MyLCD->rs_Pin,
-                      is_command ? GPIO_PIN_RESET : GPIO_PIN_SET);
+	lcd.mode = mode;
 
-    // RW = 0 (always write)
-    HAL_GPIO_WritePin(MyLCD->rw_Port, MyLCD->rw_Pin, GPIO_PIN_RESET);
+	lcd.en_pin = en_pin;
+	lcd.en_port = en_port;
 
-#ifdef LCD_8_BIT_MODE
-    // Send high byte
-    HAL_GPIO_WritePin(MyLCD->d0_Port, MyLCD->d0_Pin, (data & 0x01) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d1_Port, MyLCD->d1_Pin, (data & 0x02) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d2_Port, MyLCD->d2_Pin, (data & 0x04) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d3_Port, MyLCD->d3_Pin, (data & 0x08) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d4_Port, MyLCD->d4_Pin, (data & 0x10) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d5_Port, MyLCD->d5_Pin, (data & 0x20) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d6_Port, MyLCD->d6_Pin, (data & 0x40) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d7_Port, MyLCD->d7_Pin, (data & 0x80) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+	lcd.rs_pin = rs_pin;
+	lcd.rs_port = rs_port;
 
-    // Pulse EN
-    HAL_GPIO_WritePin(MyLCD->en_Port, MyLCD->en_Pin, GPIO_PIN_SET);
-    HAL_Delay(1);
-    HAL_GPIO_WritePin(MyLCD->en_Port, MyLCD->en_Pin, GPIO_PIN_RESET);
+	lcd.data_pin = pin;
+	lcd.data_port = port;
 
-    HAL_Delay(2); // wait for LCD internal processing
-    lcd_busy = 0;
+	Lcd_init(&lcd);
 
-#else
-    // ---------- Send high nibble ----------
-    HAL_GPIO_WritePin(MyLCD->d4_Port, MyLCD->d4_Pin, (data & 0x10) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d5_Port, MyLCD->d5_Pin, (data & 0x20) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d6_Port, MyLCD->d6_Pin, (data & 0x40) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d7_Port, MyLCD->d7_Pin, (data & 0x80) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+	return lcd;
+}
 
-    // Pulse EN
-    HAL_GPIO_WritePin(MyLCD->en_Port, MyLCD->en_Pin, GPIO_PIN_SET);
-    HAL_Delay(1);
-    HAL_GPIO_WritePin(MyLCD->en_Port, MyLCD->en_Pin, GPIO_PIN_RESET);
+/**
+ * Initialize 16x2-lcd without cursor
+ */
+void Lcd_init(Lcd_HandleTypeDef *lcd)
+{
+	if (lcd->mode == LCD_4_BIT_MODE)
+	{
+		lcd_write_command(lcd, 0x33);
+		lcd_write_command(lcd, 0x32);
+		lcd_write_command(lcd, FUNCTION_SET | OPT_N); // 4-bit mode
+	}
+	else
+		lcd_write_command(lcd, FUNCTION_SET | OPT_DL | OPT_N);
 
-    // ---------- Send low nibble ----------
-    HAL_GPIO_WritePin(MyLCD->d4_Port, MyLCD->d4_Pin, (data & 0x01) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d5_Port, MyLCD->d5_Pin, (data & 0x02) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d6_Port, MyLCD->d6_Pin, (data & 0x04) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d7_Port, MyLCD->d7_Pin, (data & 0x08) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+	lcd_write_command(lcd, CLEAR_DISPLAY);					// Clear screen
+	lcd_write_command(lcd, DISPLAY_ON_OFF_CONTROL | OPT_D); // Lcd-on, cursor-off, no-blink
+	lcd_write_command(lcd, ENTRY_MODE_SET | OPT_INC);		// Increment cursor
+}
 
-    // Pulse EN
-    HAL_GPIO_WritePin(MyLCD->en_Port, MyLCD->en_Pin, GPIO_PIN_SET);
-    HAL_Delay(1);
-    HAL_GPIO_WritePin(MyLCD->en_Port, MyLCD->en_Pin, GPIO_PIN_RESET);
+/**
+ * Write a number on the current position
+ */
+void Lcd_int(Lcd_HandleTypeDef *lcd, int number)
+{
+	char buffer[11];
+	sprintf(buffer, "%d", number);
 
-    HAL_Delay(2); // wait for LCD internal processing
-    lcd_busy = 0;
+	Lcd_string(lcd, buffer);
+}
 
+/**
+ * Write a string on the current position
+ */
+void Lcd_string(Lcd_HandleTypeDef *lcd, char *string)
+{
+	for (uint8_t i = 0; i < strlen(string); i++)
+	{
+		lcd_write_data(lcd, string[i]);
+	}
+}
+
+void Lcd_Blink(Lcd_HandleTypeDef *lcd, uint8_t row1, uint8_t col1)
+{
+
+	lcd_write_command(lcd, SET_DDRAM_ADDR + ROW_16[row1] + col1);
+	lcd_write_command(lcd, 0x0F);
+}
+
+void Lcd_Blink_off(Lcd_HandleTypeDef *lcd, uint8_t row1, uint8_t col1)
+{
+
+	lcd_write_command(lcd, SET_DDRAM_ADDR + ROW_16[row1] + col1);
+	lcd_write_command(lcd, 0x0C);
+}
+/**
+ * Set the cursor position
+ */
+void Lcd_cursor(Lcd_HandleTypeDef *lcd, uint8_t row, uint8_t col)
+{
+#ifdef LCD20xN
+	lcd_write_command(lcd, SET_DDRAM_ADDR + ROW_20[row] + col);
+#endif
+
+#ifdef LCD16xN
+	lcd_write_command(lcd, SET_DDRAM_ADDR + ROW_16[row] + col);
 #endif
 }
 
-void init_pins()
+/**
+ * Clear the screen
+ */
+void Lcd_clear(Lcd_HandleTypeDef *lcd)
 {
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-    // init all the pins be ready for any port on any pin
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-
-    GPIO_InitStruct.Pin = MyLCD->rs_Pin;
-    HAL_GPIO_Init(MyLCD->rs_Port, &GPIO_InitStruct);
-
-    GPIO_InitStruct.Pin = MyLCD->en_Pin;
-    HAL_GPIO_Init(MyLCD->en_Port, &GPIO_InitStruct);
-
-    if (MyLCD->rw_Port != NULL && MyLCD->rw_Pin != -1)
-    {
-        GPIO_InitStruct.Pin = MyLCD->rw_Pin;
-        HAL_GPIO_Init(MyLCD->rw_Port, &GPIO_InitStruct);
-    }
-
-#ifdef LCD_8_BIT_MODE
-    GPIO_InitStruct.Pin = MyLCD->d0_Pin;
-    HAL_GPIO_Init(MyLCD->d0_Port, &GPIO_InitStruct);
-
-    GPIO_InitStruct.Pin = MyLCD->d1_Pin;
-    HAL_GPIO_Init(MyLCD->d1_Port, &GPIO_InitStruct);
-
-    GPIO_InitStruct.Pin = MyLCD->d2_Pin;
-    HAL_GPIO_Init(MyLCD->d2_Port, &GPIO_InitStruct);
-
-    GPIO_InitStruct.Pin = MyLCD->d3_Pin;
-    HAL_GPIO_Init(MyLCD->d3_Port, &GPIO_InitStruct);
-
-    GPIO_InitStruct.Pin = MyLCD->d4_Pin;
-    HAL_GPIO_Init(MyLCD->d4_Port, &GPIO_InitStruct);
-
-    GPIO_InitStruct.Pin = MyLCD->d5_Pin;
-    HAL_GPIO_Init(MyLCD->d5_Port, &GPIO_InitStruct);
-
-    GPIO_InitStruct.Pin = MyLCD->d6_Pin;
-    HAL_GPIO_Init(MyLCD->d6_Port, &GPIO_InitStruct);
-
-    GPIO_InitStruct.Pin = MyLCD->d7_Pin;
-    HAL_GPIO_Init(MyLCD->d7_Port, &GPIO_InitStruct);
-
-#else
-    GPIO_InitStruct.Pin = MyLCD->d4_Pin;
-    HAL_GPIO_Init(MyLCD->d4_Port, &GPIO_InitStruct);
-
-    GPIO_InitStruct.Pin = MyLCD->d5_Pin;
-    HAL_GPIO_Init(MyLCD->d5_Port, &GPIO_InitStruct);
-
-    GPIO_InitStruct.Pin = MyLCD->d6_Pin;
-    HAL_GPIO_Init(MyLCD->d6_Port, &GPIO_InitStruct);
-
-    GPIO_InitStruct.Pin = MyLCD->d7_Pin;
-    HAL_GPIO_Init(MyLCD->d7_Port, &GPIO_InitStruct);
-
-#endif
+	lcd_write_command(lcd, CLEAR_DISPLAY);
 }
 
-void LCD_Clear()
+/************************************** Static function definition **************************************/
+
+/**
+ * Write a byte to the command register
+ */
+void lcd_write_command(Lcd_HandleTypeDef *lcd, uint8_t command)
 {
-    LCD_send(0x01, true); // Clear display command
-    HAL_Delay(2);         // Wait for clear command to process
+	HAL_GPIO_WritePin(lcd->rs_port, lcd->rs_pin, LCD_COMMAND_REG); // Write to command register
+
+	if (lcd->mode == LCD_4_BIT_MODE)
+	{
+		lcd_write(lcd, (command >> 4), LCD_NIB);
+		lcd_write(lcd, command & 0x0F, LCD_NIB);
+	}
+	else
+	{
+		lcd_write(lcd, command, LCD_BYTE);
+	}
 }
 
-void LCD_SetCursor(uint8_t row, uint8_t col)
+/**
+ * Write a byte to the data register
+ */
+void lcd_write_data(Lcd_HandleTypeDef *lcd, uint8_t data)
 {
-uint8_t address = 0;
-#if defined(LCD16X2)
+	HAL_GPIO_WritePin(lcd->rs_port, lcd->rs_pin, LCD_DATA_REG); // Write to data register
 
-    address = (row == 0) ? 0x00 : 0x40; // DDRAM address for row 1 and row 2
-    address += col;                             // Add column offset
-
-#elif defined(LCD20X4)
-    switch (row)
-    {
-    case 0:
-        address = 0x00;
-        break;
-    case 1:
-        address = 0x40;
-        break;
-    case 2:
-        address = 0x14;
-        break;
-    case 3:
-        address = 0x54;
-        break;
-    default:
-        address = 0x00;
-    }
-    address += col; // Add column offset
-#endif
-    LCD_send(0x80 | address, true); // Set DDRAM address command
+	if (lcd->mode == LCD_4_BIT_MODE)
+	{
+		lcd_write(lcd, data >> 4, LCD_NIB);
+		lcd_write(lcd, data & 0x0F, LCD_NIB);
+	}
+	else
+	{
+		lcd_write(lcd, data, LCD_BYTE);
+	}
 }
 
-void LCD_Print(const char *str)
+/**
+ * Set len bits on the bus and toggle the enable line
+ */
+void lcd_write(Lcd_HandleTypeDef *lcd, uint8_t data, uint8_t len)
 {
-    while (*str)
-    {
-        LCD_send(*str++, false); // Send character data
-    }
+	HAL_GPIO_WritePin(lcd->data_port[0], lcd->data_pin[0], (data >> 0) & 0x01);
+	HAL_GPIO_WritePin(lcd->data_port[1], lcd->data_pin[1], (data >> 1) & 0x01);
+	HAL_GPIO_WritePin(lcd->data_port[2], lcd->data_pin[2], (data >> 2) & 0x01);
+	HAL_GPIO_WritePin(lcd->data_port[3], lcd->data_pin[3], (data >> 3) & 0x01);
+
+	HAL_GPIO_WritePin(lcd->en_port, lcd->en_pin, 1);
+	DELAY(1);
+	HAL_GPIO_WritePin(lcd->en_port, lcd->en_pin, 0); // Data receive on falling edge
+}
+void Lcd_float(Lcd_HandleTypeDef *lcd, float value)
+{
+	char buffer[16];
+
+	int int_part = (int)value;
+	int frac_part;
+
+	if (value < 0)
+	{
+		frac_part = (int)((-value - (-int_part)) * 100);
+	}
+	else
+	{
+		frac_part = (int)((value - int_part) * 100);
+	}
+
+	// Format string correctly with sign
+	sprintf(buffer, "%d.%02d", int_part, frac_part);
+	Lcd_string(lcd, buffer);
 }
 
-
-void display_begin()
+void Lcd_string_len(Lcd_HandleTypeDef *lcd, const char *str, uint8_t len)
 {
-    // Wait for LCD to power up
-    HAL_Delay(50);
-
-#ifdef LCD_8_BIT_MODE // Initialization sequence for 8-bit mode
-    // make all pins low
-    HAL_GPIO_WritePin(MyLCD->rs_Port, MyLCD->rs_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->rw_Port, MyLCD->rw_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->en_Port, MyLCD->en_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d0_Port, MyLCD->d0_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d1_Port, MyLCD->d1_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d2_Port, MyLCD->d2_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d3_Port, MyLCD->d3_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d4_Port, MyLCD->d4_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d5_Port, MyLCD->d5_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d6_Port, MyLCD->d6_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d7_Port, MyLCD->d7_Pin, GPIO_PIN_RESET);
-
-#if defined(LCD16X2) // 8 bit mode initialization for 16x2 LCD
-    // Initialization sequence
-    LCD_send(0x30, false); // Function set: 8-bit mode
-    HAL_Delay(5);
-
-    LCD_send(0x30, false);
-    HAL_Delay(5);
-
-    LCD_send(0x30, false);
-    HAL_Delay(5);
-
-    LCD_send(0x38, false); // 8-bit, 2 line, 5x8 dots
-    LCD_send(0x0C, false); // Display ON, Cursor OFF
-    LCD_send(0x06, false); // Entry mode set: Increment cursor
-
-#elif defined(LCD20X4) // 8 bit mode initialization for 20x4 LCD
-    // Initialization sequence
-    LCD_send(0x30, false); // Function set: 8-bit mode
-    HAL_Delay(5);
-
-    LCD_send(0x30, false);
-    HAL_Delay(5);
-
-    LCD_send(0x30, false);
-    HAL_Delay(5);
-
-    LCD_send(0x38, false); // 8-bit, 2 line, 5x8 dots
-    LCD_send(0x0C, false); // Display ON, Cursor OFF
-    LCD_send(0x06, false); // Entry mode set: Increment cursor
-
-#endif
-
-#else // 4-bit mode initialization
-    // make all pins low
-    HAL_GPIO_WritePin(MyLCD->rs_Port, MyLCD->rs_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->en_Port, MyLCD->en_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d4_Port, MyLCD->d4_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d5_Port, MyLCD->d5_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d6_Port, MyLCD->d6_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(MyLCD->d7_Port, MyLCD->d7_Pin, GPIO_PIN_RESET);
-
-#ifdef LCD16X2 // Initialization sequence for 16x2 LCD in 4-bit mode
-    // Initialization sequence
-    LCD_send(0x03, false); // Function set: 8-bit mode
-    HAL_Delay(5);
-
-    LCD_send(0x03, false);
-    HAL_Delay(5);
-
-    LCD_send(0x02, false); // Set to 4-bit mode
-    HAL_Delay(5);
-
-    LCD_send(0x28, false); // 4-bit, 2 line, 5x8 dots
-    LCD_send(0x0C, false); // Display ON, Cursor OFF
-
-    LCD_send(0x06, false); // Entry mode set: Increment cursor
-
-#endif
-
-#ifdef LCD20X4 // Initialization sequence for 20x4 LCD in 4-bit mode
-    // Initialization sequence
-    LCD_send(0x28, false); // Function set: 8-bit mode
-    HAL_Delay(5);
-
-    LCD_send(0x08, false);
-    HAL_Delay(5);
-
-    LCD_send(0x06, false); // Set to 4-bit mode
-    HAL_Delay(5);
-
-    LCD_send(0x06, false); // Entry mode set: Increment cursor
-    LCD_send(0x0C, false); // Display ON, Cursor OFF
-
-#endif
-    LCD_Clear();
-#endif
-}
-
-void LCD_Init(LCD_HandleTypeDef *lcd)
-{
-    MyLCD = lcd;
-    init_pins();
-    HAL_Delay(50); // Wait for LCD to power up
-    display_begin();
+	while (len--)
+	{
+		if (*str)
+			lcd_write_data(lcd, *str++);
+		else
+			lcd_write_data(lcd, ' ');
+	}
 }

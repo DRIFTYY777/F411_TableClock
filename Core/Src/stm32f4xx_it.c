@@ -57,6 +57,7 @@
 /* External variables --------------------------------------------------------*/
 
 /* USER CODE BEGIN EV */
+extern RTC_HandleTypeDef hrtc;
 
 /* USER CODE END EV */
 
@@ -199,5 +200,18 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /* USER CODE BEGIN 1 */
+
+void EXTI9_5_IRQHandler(void)
+{
+  HAL_GPIO_EXTI_IRQHandler(UP_Pin);
+  HAL_GPIO_EXTI_IRQHandler(DOWN_Pin);
+  HAL_GPIO_EXTI_IRQHandler(BACK_Pin);
+  HAL_GPIO_EXTI_IRQHandler(ENTER_Pin);
+}
+
+void RTC_WKUP_IRQHandler(void)
+{
+  HAL_RTCEx_WakeUpTimerIRQHandler(&hrtc);
+}
 
 /* USER CODE END 1 */
